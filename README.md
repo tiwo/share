@@ -47,12 +47,12 @@ Implemented in this phase:
 - Optional two-way camera sharing (either side can start camera).
 - Reconnect handling with bounded backoff.
 - Share link and QR code display for guest onboarding.
+- Data-channel authentication handshake (mutual HMAC challenge-response with replay checks).
 
 Not implemented yet:
 
 - Chat transport and UI.
 - File transfer transport and UI.
-- App-level authentication handshake on top of WebRTC encryption.
 
 # local usage
 

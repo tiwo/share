@@ -73,6 +73,48 @@ export const createGuestPeerId = (): string => {
 	return `share-guest-${toHex(random)}`
 }
 
+export const generateNonce = (byteLength = 16): string => {
+	const nonce = crypto.getRandomValues(new Uint8Array(byteLength))
+	return encodeSecret(nonce)
+}
+
+export const deriveAuthKey = async (secret: string): Promise<CryptoKey> => {
+	const keyBytes = decodeSecret(secret)
+	if (!keyBytes) {
+		throw new Error('Cannot derive auth key from invalid secret.')
+	}
+
+	const keyMaterial = new TextEncoder().encode(secret)
+
+	return crypto.subtle.importKey('raw', keyMaterial, { name: 'HMAC', hash: 'SHA-256' }, false, [
+		'sign',
+	])
+}
+
+const bytesToBase64Url = (bytes: Uint8Array): string => {
+	const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')
+	return baseUrlSafe(btoa(binary))
+}
+
+export const signAuthPayload = async (key: CryptoKey, payload: string): Promise<string> => {
+	const data = new TextEncoder().encode(payload)
+	const signature = await crypto.subtle.sign('HMAC', key, data)
+	return bytesToBase64Url(new Uint8Array(signature))
+}
+
+export const secureEqual = (left: string, right: string): boolean => {
+	if (left.length !== right.length) {
+		return false
+	}
+
+	let mismatch = 0
+	for (let index = 0; index < left.length; index += 1) {
+		mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index)
+	}
+
+	return mismatch === 0
+}
+
 export const createShareUrl = (secret: string): string => {
 	const url = new URL(window.location.href)
 	url.hash = secret
