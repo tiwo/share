@@ -72,6 +72,13 @@ const role = ref<SessionRole>('host')
 const phase = ref<ConnectionPhase>('INIT')
 const authState = ref<AuthState>('idle')
 const authText = ref('Waiting for peer authentication.')
+const lastAuthFailure = ref('')
+
+const nonceCacheSize = computed(() => seenNonces.size)
+
+const clearNonceCache = (): void => {
+  seenNonces.clear()
+}
 const secret = ref('')
 const roomPeerId = ref('')
 const selfPeerId = ref('')
@@ -378,6 +385,7 @@ const sendProofIfReady = async (connection: DataConnection): Promise<void> => {
 const failAuthentication = async (connection: DataConnection, reason: string): Promise<void> => {
   cleanupAuthAttemptTimer()
   setAuthStatus('in-progress', `${reason} Retrying...`)
+  lastAuthFailure.value = reason
 
   const failMessage: AuthFailMessage = {
     kind: 'AUTH_FAIL',
@@ -895,6 +903,19 @@ onBeforeUnmount(() => {
           <strong>Status:</strong>
           <span>{{ statusText }}</span>
         </p>
+        <p class="meta-row">
+          <strong>Auth:</strong>
+          <span>{{ authText }}</span>
+        </p>
+        <details class="auth-diagnostics">
+          <summary>Auth diagnostics</summary>
+          <div class="diag-row"><strong>State:</strong> <span>{{ authState }}</span></div>
+          <div class="diag-row"><strong>Attempts:</strong> <span>{{ authAttempt }}</span></div>
+          <div class="diag-row"><strong>Last failure:</strong> <span class="code-like">{{ lastAuthFailure || 'none' }}</span></div>
+          <div class="diag-row"><strong>Nonce cache:</strong> <span>{{ nonceCacheSize }}</span></div>
+          <div class="diag-row"><strong>Replay window:</strong> <span>{{ Math.round(replayWindowMs/1000) }}s</span></div>
+          <div style="margin-top:8px"><button class="button ghost" @click="clearNonceCache">Clear nonce cache</button></div>
+        </details>
         <p class="meta-row">
           <strong>Auth:</strong>
           <span>{{ authText }}</span>
