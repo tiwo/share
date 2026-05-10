@@ -19,8 +19,11 @@ import {
   describeMediaError,
   detachStreamFromVideo,
   stopMediaStream,
+  parseChatMessage,
+  createChatId,
   type ConnectionPhase,
 } from './lib/helpers'
+import Chat from './components/Chat.vue'
 
 type SessionRole = 'host' | 'guest'
 type AuthState = 'idle' | 'in-progress' | 'authenticated' | 'failed'
@@ -116,6 +119,9 @@ const isAuthenticated = computed(() => authState.value === 'authenticated')
 const hasLocalCamera = computed(() => localStream.value !== null)
 const hasRemoteVideo = computed(() => remoteStream.value !== null)
 
+const messages = ref<Array<any>>([])
+const chatInput = ref('')
+
 const isHost = computed(() => role.value === 'host')
 
 const phaseLabel = computed(() => {
@@ -185,6 +191,23 @@ const cleanupAuthAttemptTimer = (): void => {
   if (authAttemptTimer !== null) {
     window.clearTimeout(authAttemptTimer)
     authAttemptTimer = null
+  }
+}
+
+const sendChatMessage = (text: string): void => {
+  if (!dataConnection || !dataConnection.open) return
+  if (!isAuthenticated.value) {
+    setError('Wait for peer authentication before sending chat messages.')
+    return
+  }
+
+  const msg = { kind: 'CHAT_MSG', id: createChatId(), from: selfPeerId.value, ts: Date.now(), text }
+  try {
+    dataConnection.send(msg)
+    messages.push(msg)
+    chatInput.value = ''
+  } catch (e) {
+    setError('Failed to send chat message.')
   }
 }
 
@@ -587,11 +610,19 @@ const setupDataConnection = (connection: DataConnection): void => {
 
   connection.on('data', (payload) => {
     const authMessage = parseAuthMessage(payload)
-    if (!authMessage) {
+    if (authMessage) {
+      void processAuthMessage(connection, authMessage)
       return
     }
 
-    void processAuthMessage(connection, authMessage)
+    const chat = parseChatMessage(payload)
+    if (chat) {
+      // Only accept chat after authentication
+      if (isAuthenticated.value) {
+        messages.push(chat)
+      }
+      return
+    }
   })
 
   connection.on('close', () => {
@@ -958,6 +989,12 @@ onBeforeUnmount(() => {
         <p v-else class="hint-text">
           Camera is video-only in this phase. Microphone, chat, and file sharing come next.
         </p>
+      </article>
+    </section>
+
+    <section class="chat-dock">
+      <article class="panel chat-panel">
+        <Chat :messages="messages" :selfId="selfPeerId" :isAuthenticated="isAuthenticated" @send-message="(p) => sendChatMessage(p.text)" />
       </article>
     </section>
 

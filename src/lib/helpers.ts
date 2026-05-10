@@ -9,6 +9,11 @@ export const CONNECTION_PHASES = [
 
 export type ConnectionPhase = (typeof CONNECTION_PHASES)[number]
 
+const toHex = (bytes: Uint8Array): string =>
+	Array.from(bytes)
+		.map((byte) => byte.toString(16).padStart(2, '0'))
+		.join('')
+
 export const buildBackoffSchedule = (
 	attempts: number,
 	baseDelayMs = 500,
@@ -83,4 +88,31 @@ export const describeMediaError = (error: unknown): string => {
 	}
 
 	return 'An unknown camera error occurred.'
+}
+
+export type ChatMessage = {
+	kind: 'CHAT_MSG'
+	id: string
+	from: string
+	ts: number
+	text: string
+	meta?: Record<string, unknown>
+}
+
+export const createChatId = (): string => {
+	const bytes = crypto.getRandomValues(new Uint8Array(8))
+	return `m-${toHex(bytes)}`
+}
+
+export const parseChatMessage = (value: unknown): ChatMessage | null => {
+	if (typeof value !== 'object' || value === null) return null
+	const v = value as Record<string, unknown>
+	if (v.kind !== 'CHAT_MSG') return null
+	if (typeof v.id !== 'string') return null
+	if (typeof v.from !== 'string') return null
+	if (typeof v.ts !== 'number') return null
+	if (typeof v.text !== 'string') return null
+	const chat: ChatMessage = { kind: 'CHAT_MSG', id: v.id, from: v.from, ts: v.ts, text: v.text }
+	if (v.meta && typeof v.meta === 'object') chat.meta = v.meta as Record<string, unknown>
+	return chat
 }
