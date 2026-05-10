@@ -104,6 +104,8 @@ export const createChatId = (): string => {
 	return `m-${toHex(bytes)}`
 }
 
+export const createAttachmentId = (): string => createChatId()
+
 export const parseChatMessage = (value: unknown): ChatMessage | null => {
 	if (typeof value !== 'object' || value === null) return null
 	const v = value as Record<string, unknown>

@@ -21,6 +21,7 @@ import {
   stopMediaStream,
   parseChatMessage,
   createChatId,
+  createAttachmentId,
   type ConnectionPhase,
 } from './lib/helpers'
 import Chat from './components/Chat.vue'
@@ -208,6 +209,33 @@ const sendChatMessage = (text: string): void => {
     chatInput.value = ''
   } catch (e) {
     setError('Failed to send chat message.')
+  }
+}
+
+const sendFile = (file: File): void => {
+  if (!dataConnection || !dataConnection.open) return
+  if (!isAuthenticated.value) {
+    setError('Wait for peer authentication before sending files.')
+    return
+  }
+
+  const attachmentId = createAttachmentId()
+  const announcement = {
+    kind: 'CHAT_MSG',
+    id: createChatId(),
+    from: selfPeerId.value,
+    ts: Date.now(),
+    text: '',
+    meta: { attachment: { id: attachmentId, name: file.name, size: file.size, type: file.type } },
+  }
+
+  try {
+    dataConnection.send(announcement)
+    messages.push(announcement)
+    setStatus(`Queued file: ${file.name}`)
+    // actual file transfer will be implemented later (chunking + progress)
+  } catch (e) {
+    setError('Failed to announce file attachment.')
   }
 }
 
@@ -994,7 +1022,7 @@ onBeforeUnmount(() => {
 
     <section class="chat-dock">
       <article class="panel chat-panel">
-        <Chat :messages="messages" :selfId="selfPeerId" :isAuthenticated="isAuthenticated" @send-message="(p) => sendChatMessage(p.text)" />
+        <Chat :messages="messages" :selfId="selfPeerId" :isAuthenticated="isAuthenticated" @send-message="(p) => sendChatMessage(p.text)" @send-file="(p) => sendFile(p.file)" />
       </article>
     </section>
 
