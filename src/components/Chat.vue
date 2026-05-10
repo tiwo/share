@@ -46,7 +46,20 @@ const onSend = () => {
       <div v-if="formatted.length === 0" class="hint-text">No messages yet.</div>
       <div v-for="msg in formatted" :key="msg.id" style="margin-bottom:6px;">
         <div style="font-size:12px;color:#666">{{ msg.from }} · {{ new Date(msg.ts).toLocaleTimeString() }}</div>
-        <div style="padding:6px;background:#f7f7f8;border-radius:6px;display:inline-block">{{ msg.text }}</div>
+        <div style="padding:6px;background:#f7f7f8;border-radius:6px;display:inline-block">
+          <template v-if="msg.meta && msg.meta.attachment">
+            <div>{{ msg.meta.attachment.name }} ({{ msg.meta.attachment.size }} bytes)</div>
+            <div v-if="msg.meta.attachment.blobUrl">
+              <a :href="msg.meta.attachment.blobUrl" target="_blank" rel="noreferrer">Download</a>
+            </div>
+            <div v-else>
+              <small>Receiving... {{ Math.round((msg.meta.receivedBytes || 0) / (msg.meta.attachment.size || 1) * 100) }}%</small>
+            </div>
+          </template>
+          <template v-else>
+            {{ msg.text }}
+          </template>
+        </div>
       </div>
     </div>
 

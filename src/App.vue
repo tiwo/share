@@ -24,6 +24,7 @@ import {
   createAttachmentId,
   type ConnectionPhase,
 } from './lib/helpers'
+import { bytesToBase64Url, base64UrlToBytes } from './lib/crypto'
 import Chat from './components/Chat.vue'
 
 type SessionRole = 'host' | 'guest'
@@ -122,6 +123,7 @@ const hasRemoteVideo = computed(() => remoteStream.value !== null)
 
 const messages = ref<Array<any>>([])
 const chatInput = ref('')
+const attachments = new Map<string, any>()
 
 const isHost = computed(() => role.value === 'host')
 
@@ -237,6 +239,38 @@ const sendFile = (file: File): void => {
   } catch (e) {
     setError('Failed to announce file attachment.')
   }
+}
+
+const CHUNK_SIZE = 64 * 1024
+
+const sendFileChunks = async (file: File, attachmentId: string) => {
+  const total = Math.ceil(file.size / CHUNK_SIZE)
+  let seq = 0
+  while (seq < total) {
+    const start = seq * CHUNK_SIZE
+    const end = Math.min(file.size, start + CHUNK_SIZE)
+    const slice = file.slice(start, end)
+    const buffer = await slice.arrayBuffer()
+    const chunk = bytesToBase64Url(new Uint8Array(buffer))
+    const msg = { kind: 'FILE_CHUNK', attachmentId, seq, total, data: chunk }
+    try {
+      dataConnection?.send(msg)
+      // update progress in UI
+      const existing = messages.find((m) => m.meta?.attachment?.id === attachmentId)
+      if (existing) {
+        existing.meta.receivedBytes = Math.min((existing.meta.receivedBytes || 0) + (end - start), existing.meta.attachment.size)
+      }
+    } catch (e) {
+      setError('Failed to send file chunk.')
+      return
+    }
+    seq += 1
+    // small pause to avoid saturating channel
+    await new Promise((r) => setTimeout(r, 10))
+  }
+  // send file done message
+  const done = { kind: 'FILE_DONE', attachmentId, ts: Date.now() }
+  dataConnection?.send(done)
 }
 
 const resetAuthAttemptState = (): void => {
@@ -650,6 +684,53 @@ const setupDataConnection = (connection: DataConnection): void => {
         messages.push(chat)
       }
       return
+    }
+
+    // file protocol
+    if (typeof payload === 'object' && payload !== null) {
+      const p: any = payload as any
+      if (p.kind === 'FILE_ANNOUNCE') {
+        // create attachment entry
+        attachments.set(p.attachment.id, { ...p.attachment, receivedChunks: [], receivedBytes: 0, blobUrl: null })
+        // push a message entry to show incoming file progress
+        messages.push({ kind: 'CHAT_MSG', id: createChatId(), from: p.from, ts: Date.now(), text: `Incoming file: ${p.attachment.name}`, meta: { attachment: { ...p.attachment } } })
+        return
+      }
+
+      if (p.kind === 'FILE_CHUNK') {
+        const a = attachments.get(p.attachmentId)
+        if (!a) return
+        a.receivedChunks[p.seq] = p.data
+        a.receivedBytes = (a.receivedBytes || 0) + base64UrlToBytes(p.data).byteLength
+        // update progress in messages
+        const msg = messages.find((m) => m.meta?.attachment?.id === p.attachmentId)
+        if (msg) msg.meta.receivedBytes = a.receivedBytes
+        // if complete
+        if (a.receivedChunks.filter(Boolean).length === p.total) {
+          // reconstruct
+          const parts: Uint8Array[] = a.receivedChunks.map((c: string) => base64UrlToBytes(c))
+          const totalLen = parts.reduce((s: number, p2: Uint8Array) => s + p2.byteLength, 0)
+          const out = new Uint8Array(totalLen)
+          let offset = 0
+          for (const part of parts) {
+            out.set(part, offset)
+            offset += part.byteLength
+          }
+          const blob = new Blob([out], { type: a.type })
+          const url = URL.createObjectURL(blob)
+          a.blobUrl = url
+          a.completed = true
+          // update message entry with blobUrl
+          const msg2 = messages.find((m) => m.meta?.attachment?.id === p.attachmentId)
+          if (msg2) msg2.meta.attachment.blobUrl = url
+        }
+        return
+      }
+
+      if (p.kind === 'FILE_DONE') {
+        // finished marker received; nothing extra to do here
+        return
+      }
     }
   })
 

@@ -96,6 +96,14 @@ const bytesToBase64Url = (bytes: Uint8Array): string => {
 	return baseUrlSafe(btoa(binary))
 }
 
+export const base64UrlToBytes = (value: string): Uint8Array => {
+	const base64 = fromBaseUrlSafe(value)
+	const binary = atob(base64)
+	return Uint8Array.from(binary, (char) => char.charCodeAt(0))
+}
+
+export { bytesToBase64Url }
+
 export const signAuthPayload = async (key: CryptoKey, payload: string): Promise<string> => {
 	const data = new TextEncoder().encode(payload)
 	const signature = await crypto.subtle.sign('HMAC', key, data)
