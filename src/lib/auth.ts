@@ -1,4 +1,3 @@
-import type { DataConnection } from 'peerjs'
 import {
   deriveAuthKey,
   generateNonce,
@@ -221,7 +220,7 @@ export class AuthManager {
       const ackPayload = this.makeAckPayload(this.selfId, this.remoteHello.from, this.attempt, msg.mac)
       const ackMac = await this.signPayload(ackPayload)
       const ack: AuthAckMessage = { kind: 'AUTH_ACK', attempt: this.attempt, from: this.selfId, proofMac: msg.mac, mac: ackMac }
-      this.connectionSend(ack)
+      this.connectionSend?.(ack)
       this.maybeFinalize()
       return
     }
@@ -254,7 +253,7 @@ export class AuthManager {
     this.sentProofMac = mac
     this.sentProof = true
     const proof: AuthProofMessage = { kind: 'AUTH_PROOF', attempt: this.attempt, from: this.selfId, nonce: this.localHello.nonce, peerNonce: this.remoteHello.nonce, ts: this.localHello.ts, peerTs: this.remoteHello.ts, mac }
-    this.connectionSend(proof)
+    this.connectionSend?.(proof)
   }
 
   private maybeFinalize(): void {

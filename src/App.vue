@@ -207,7 +207,7 @@ const sendChatMessage = (text: string): void => {
   const msg = { kind: 'CHAT_MSG', id: createChatId(), from: selfPeerId.value, ts: Date.now(), text }
   try {
     dataConnection.send(msg)
-    messages.push(msg)
+    messages.value.push(msg)
     chatInput.value = ''
   } catch (e) {
     setError('Failed to send chat message.')
@@ -233,9 +233,9 @@ const sendFile = (file: File): void => {
 
   try {
     dataConnection.send(announcement)
-    messages.push(announcement)
+    messages.value.push(announcement)
     setStatus(`Queued file: ${file.name}`)
-    // actual file transfer will be implemented later (chunking + progress)
+    void sendFileChunks(file, attachmentId)
   } catch (e) {
     setError('Failed to announce file attachment.')
   }
@@ -256,7 +256,7 @@ const sendFileChunks = async (file: File, attachmentId: string) => {
     try {
       dataConnection?.send(msg)
       // update progress in UI
-      const existing = messages.find((m) => m.meta?.attachment?.id === attachmentId)
+      const existing = messages.value.find((m) => m.meta?.attachment?.id === attachmentId)
       if (existing) {
         existing.meta.receivedBytes = Math.min((existing.meta.receivedBytes || 0) + (end - start), existing.meta.attachment.size)
       }
@@ -681,7 +681,7 @@ const setupDataConnection = (connection: DataConnection): void => {
     if (chat) {
       // Only accept chat after authentication
       if (isAuthenticated.value) {
-        messages.push(chat)
+        messages.value.push(chat)
       }
       return
     }
@@ -693,7 +693,7 @@ const setupDataConnection = (connection: DataConnection): void => {
         // create attachment entry
         attachments.set(p.attachment.id, { ...p.attachment, receivedChunks: [], receivedBytes: 0, blobUrl: null })
         // push a message entry to show incoming file progress
-        messages.push({ kind: 'CHAT_MSG', id: createChatId(), from: p.from, ts: Date.now(), text: `Incoming file: ${p.attachment.name}`, meta: { attachment: { ...p.attachment } } })
+        messages.value.push({ kind: 'CHAT_MSG', id: createChatId(), from: p.from, ts: Date.now(), text: `Incoming file: ${p.attachment.name}`, meta: { attachment: { ...p.attachment } } })
         return
       }
 
@@ -703,7 +703,7 @@ const setupDataConnection = (connection: DataConnection): void => {
         a.receivedChunks[p.seq] = p.data
         a.receivedBytes = (a.receivedBytes || 0) + base64UrlToBytes(p.data).byteLength
         // update progress in messages
-        const msg = messages.find((m) => m.meta?.attachment?.id === p.attachmentId)
+        const msg = messages.value.find((m) => m.meta?.attachment?.id === p.attachmentId)
         if (msg) msg.meta.receivedBytes = a.receivedBytes
         // if complete
         if (a.receivedChunks.filter(Boolean).length === p.total) {
@@ -721,7 +721,7 @@ const setupDataConnection = (connection: DataConnection): void => {
           a.blobUrl = url
           a.completed = true
           // update message entry with blobUrl
-          const msg2 = messages.find((m) => m.meta?.attachment?.id === p.attachmentId)
+          const msg2 = messages.value.find((m) => m.meta?.attachment?.id === p.attachmentId)
           if (msg2) msg2.meta.attachment.blobUrl = url
         }
         return

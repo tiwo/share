@@ -1,13 +1,11 @@
 <script setup lang="ts">
-import { defineProps, defineEmits, computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps<{ messages: any[]; selfId: string; isAuthenticated: boolean }>()
 const emit = defineEmits<{
   (e: 'send-message', payload: { text: string }): void
   (e: 'send-file', payload: { file: File }): void
 }>()
-
-import { ref } from 'vue'
 
 const formatted = computed(() => props.messages.map((m) => ({ ...m })))
 const message = ref('')
